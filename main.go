@@ -1,11 +1,12 @@
 package main
 
 import (
-	"bufio"
 	"encoding/csv"
+	"flag"
 	"fmt"
 	"log"
 	"os"
+	"time"
 )
 
 type Quiz struct {
@@ -15,6 +16,8 @@ type Quiz struct {
 
 func main() {
 	file, err := os.Open("internal/questions.csv")
+	timeLimit := flag.Int("time", 5, "Time limit in seconds")
+	flag.Parse()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -29,18 +32,31 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	input := bufio.NewScanner(os.Stdin)
 	quizzes := createQuizzes(data)
 	correctAnswers := 0
+	timer := time.NewTimer(time.Duration(*timeLimit) * time.Second)
+problemloop:
 	for _, quiz := range quizzes {
 		fmt.Println(quiz.Question)
-		input.Scan()
-		if input.Text() == quiz.Answer {
-			correctAnswers++
+		answerChan := make(chan string)
+		go func() {
+			var answer string
+			_, err := fmt.Scanf("%s\n", &answer)
+			if err != nil {
+				return
+			}
+			answerChan <- answer
+		}()
+		select {
+		case <-timer.C:
+			fmt.Printf("\nYou scored %.2f out of 100\n", (float64(correctAnswers)/float64(len(quizzes)))*100)
+			break problemloop
+		case answer := <-answerChan:
+			if answer == quiz.Answer {
+				correctAnswers++
+			}
 		}
 	}
-	score := (float64(correctAnswers) / float64(len(quizzes))) * 100
-	fmt.Printf("%.2f\n", score)
 }
 
 func createQuizzes(data [][]string) []Quiz {
